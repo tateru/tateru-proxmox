@@ -8,15 +8,15 @@ def main():
 	data = []
 
 	for server in config['manager']:
-		data.append(getInventory(server, config))
+		data.append(getInventory(server, config["manager"][server]))
 
 	return data
 
 
 def getInventory(server, config):
 	data = []
-	proxmox = ProxmoxAPI(server, user=config['manager'][server]['username'],
-                     password=config['manager'][server]['password'], verify_ssl=False)
+	proxmox = ProxmoxAPI(server, user=config['username'],
+                     password=config['password'], verify_ssl=False)
 
 	for node in proxmox.nodes.get():
 		for vm in proxmox.nodes(node['node']).get('qemu'):
