@@ -1,6 +1,6 @@
 # Tateru manager for Proxmox
 
-proxmox intergation for Tateru deployment system
+proxmox integration for Tateru deployment system
 
 ## Setup
 
