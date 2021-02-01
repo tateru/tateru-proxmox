@@ -1,4 +1,4 @@
-api:
+flask:
   debug: false
   port: 7708
 manager:
