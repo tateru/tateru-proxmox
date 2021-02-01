@@ -1,0 +1,7 @@
+api:
+  debug: false
+  port: 7708
+manager:
+  proxmox.local:
+      username: "username"
+      password: "secret-password"
