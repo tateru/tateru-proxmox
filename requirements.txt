@@ -1,2 +1,4 @@
-proxmoxer
-flask
+proxmoxer==1.2.0
+flask==2.0.2
+pyyaml>=5.4.1
+requests==2.27.1
