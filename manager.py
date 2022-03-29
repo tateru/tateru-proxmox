@@ -7,6 +7,8 @@ from proxmoxer import ProxmoxAPI
 app = Flask(__name__)
 app_config = None
 
+# uuid: nonce mapping
+installOperations = {}
 
 def proxmox_connector(server, config):
     return ProxmoxAPI(
@@ -86,6 +88,8 @@ def api_v1_machines():
 def api_v1_boot_installer(uuid):
     # According to the spec, there is a JSON payload in the request containing
     # nonce, but currently we have no use for it, so leave request body be.
+    # TODO: add nonce from installOperations, fail/noop if there is another
+    #       install request inflight for this uuid
 
     vm_data = virtual_machine(app_config, str(uuid))
     if vm_data is None:
@@ -110,6 +114,27 @@ def api_v1_boot_installer(uuid):
 
     # Set default boot order (boot from disk)
     vm.config.put(boot="order=scsi0")
+
+    return Response(status=200)
+
+
+@app.route("/v1/machines/<uuid:uuid>/exit-installer", methods=["POST"])
+def api_v1_exit_installer(uuid):
+    # According to the spec, there is a JSON payload in the request containing
+    # nonce, but currently we have no use for it, so leave request body be.
+    # TODO: remove nonce from installOperations, fail if there is no such installOperation
+
+    vm_data = virtual_machine(app_config, str(uuid))
+    if vm_data is None:
+        return Response(status=404)
+
+    vm = vm_data["_proxmox_connector"].nodes(vm_data["node"]).qemu(vm_data["vmid"])
+
+    # Power off VM
+    vm.status.stop.post()
+
+    # Power on VM
+    vm.status.start.post()
 
     return Response(status=200)
 
