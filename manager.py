@@ -20,18 +20,19 @@ def extract_vm_uuid(vm_config):
             f"Warning: VM {vm['vmid']} on node {vm['node']} has no UUID set (no smbios1 key)"
         )
 
-    parts = vm_config.get("smbios1", "=").split("=", 1)
-    if len(parts) != 2:
-        print(
-            f"Warning: VM {vm['vmid']} on node {vm['node']} has no UUID set (unable to split smbios1)"
-        )
+    options = vm_config.get("smbios1", "=").split(",")
+    for option in options:
+        parts = option.split("=", 1)
 
-    if not len(parts[1]) > 0:
-        print(
-            f"Warning: VM {vm['vmid']} on node {vm['node']} has no UUID set (value for smbios1 is empty)"
-        )
+        if parts[0] == "uuid":
+            if len(parts) != 2:
+                print(
+                    f"Warning: VM {vm['vmid']} on node {vm['node']} has no UUID set (cannot parse UUID key)"
+                )
+            else:
+                return parts[1]
 
-    return parts[1]
+    print(f"Warning: VM {vm['vmid']} on node {vm['node']} has not UUID set (no UUID found)")
 
 
 def inventories(config, connector=proxmox_connector):
