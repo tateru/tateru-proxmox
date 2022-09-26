@@ -10,10 +10,24 @@ app_config = None
 # uuid: nonce mapping
 installOperations = {}
 
-def proxmox_connector(server, config):
-    return ProxmoxAPI(
-        server, user=config["username"], password=config["password"], verify_ssl=False
-    )
+
+def proxmox_connector(config):
+    for node in config["nodes"]:
+        connector = ProxmoxAPI(
+            node,
+            user=config["username"],
+            password=config["password"],
+            verify_ssl=config.get("ssl_verify", True),
+        )
+
+        try:
+            connector.version.get()
+
+            return connector
+        except Exception as e:
+            print(f"Warning: Proxmox node {node} is unusable: {e}")
+
+    raise Exception("No usable proxmox nodes found")
 
 
 def extract_vm_uuid(vm_config):
@@ -34,14 +48,13 @@ def extract_vm_uuid(vm_config):
             else:
                 return parts[1]
 
-    print(f"Warning: VM {vm['vmid']} on node {vm['node']} has not UUID set (no UUID found)")
+    print(
+        f"Warning: VM {vm['vmid']} on node {vm['node']} has not UUID set (no UUID found)"
+    )
 
 
-def inventories(config, connector=proxmox_connector):
-    data = []
-
-    for server in config["manager"]:
-        data.extend(get_inventory(connector(server, config["manager"][server])))
+def inventory(config, connector=proxmox_connector):
+    data = get_inventory(connector(config["manager"]))
 
     return data
 
@@ -58,12 +71,11 @@ def get_inventory(proxmox):
 
 
 def virtual_machine(config, uuid, connector=proxmox_connector):
-    for server in config["manager"]:
-        c = connector(server, config["manager"][server])
-        vm = get_vm(c, uuid)
-        if vm is not None:
-            vm["_proxmox_connector"] = c
-            return vm
+    c = connector(config["manager"])
+    vm = get_vm(c, uuid)
+    if vm is not None:
+        vm["_proxmox_connector"] = c
+        return vm
 
     return None
 
@@ -81,7 +93,7 @@ def get_vm(proxmox, uuid):
 
 @app.route("/v1/machines", methods=["GET"])
 def api_v1_machines():
-    return jsonify(inventories(app_config))
+    return jsonify(inventory(app_config))
 
 
 @app.route("/v1/machines/<uuid:uuid>/boot-installer", methods=["POST"])
