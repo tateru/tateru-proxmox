@@ -1,3 +1,4 @@
+import os
 import requests
 import yaml
 
@@ -11,13 +12,63 @@ app_config = None
 installOperations = {}
 
 
+def get_setting(config, envvar, config_key, datatype=str, required=True, default=None):
+    """
+    Fetch a config parameter. Search order:
+
+        Environment variable > Config dict (config_key) > default
+    """
+    value = os.getenv(envvar, None)
+
+    if value is not None:
+        if isinstance(value, datatype):
+            return value
+        else:
+            if datatype == list:
+                return value.split()  # split on whitespace
+            elif datatype == bool:
+                return value.lower() in ["true", "t", "1", "yes"]
+
+            raise Exception(f"Unable to cast value for {envvar} to {datatype}")
+
+    try:
+        value = config[config_key]
+        if isinstance(value, datatype):
+            return value
+        else:
+            # No casting for config dict
+            raise Exception(
+                f"Invalid value for {config_key} in config file: should be {datatype} but is {type(value)}"
+            )
+    except KeyError:
+        if required:
+            raise Exception(
+                f"Missing configuration: {config_key} is required, specify either in the config file or as {envvar} environment variable"
+            )
+        else:
+            return default
+
+
 def proxmox_connector(config):
-    for node in config["nodes"]:
+    nodes = get_setting(config, "PROXMOX_MANAGER_NODES", "nodes", datatype=list)
+
+    for node in nodes:
+        settings = {
+            "user": get_setting(config, "PROXMOX_MANAGER_USERNAME", "username"),
+            "password": get_setting(config, "PROXMOX_MANAGER_PASSWORD", "password"),
+            "verify_ssl": get_setting(
+                config,
+                "PROXMOX_MANAGER_SSL_VERIFY",
+                "ssl_verify",
+                datatype=bool,
+                required=False,
+                default=True,
+            ),
+        }
+
         connector = ProxmoxAPI(
             node,
-            user=config["username"],
-            password=config["password"],
-            verify_ssl=config.get("ssl_verify", True),
+            **settings,
         )
 
         try:
