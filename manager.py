@@ -113,8 +113,23 @@ def inventory(config, connector=proxmox_connector):
 def get_inventory(proxmox):
     data = []
     for node in proxmox.nodes.get():
-        for vm in proxmox.nodes(node["node"]).get("qemu"):
-            config = proxmox.nodes(node["node"]).qemu(vm["vmid"]).config().get()
+        vms = []
+        try:
+            vms = proxmox.nodes(node["node"]).get("qemu")
+        except Exception as e:
+            print(f"Warning: Proxmox node {node} is unusable: {e}")
+            continue
+
+        for vm in vms:
+            config = None
+            try:
+                config = proxmox.nodes(node["node"]).qemu(vm["vmid"]).config().get()
+            except Exception as e:
+                print(
+                    f"Warning: Unable to fetch QEMU VM configuration for {vm['vmid']} on node {node}: {e}"
+                )
+                continue
+
             uuid = extract_vm_uuid(config)
             data.append({"uuid": uuid, "name": vm["name"]})
 
@@ -133,8 +148,15 @@ def virtual_machine(config, uuid, connector=proxmox_connector):
 
 def get_vm(proxmox, uuid):
     for vm in proxmox.cluster.resources.get(type="vm"):
-        config = proxmox.nodes(vm["node"]).qemu(vm["vmid"]).config.get()
-        vm_uuid = extract_vm_uuid(config)
+        vm_config = None
+
+        try:
+            vm_config = proxmox.nodes(vm["node"]).qemu(vm["vmid"]).config.get()
+        except Exception as e:
+            printf(f"Error: Unable to get VM config for VM {vm_data['vmid']}")
+            raise e
+
+        vm_uuid = extract_vm_uuid(vm_config)
 
         if uuid == vm_uuid:
             return vm
@@ -161,22 +183,45 @@ def api_v1_boot_installer(uuid):
     vm = vm_data["_proxmox_connector"].nodes(vm_data["node"]).qemu(vm_data["vmid"])
 
     # Get list of all nics
+    vm_config = None
+    try:
+        vm_config = vm.config.get()
+    except Exception as e:
+        printf(f"Error: Unable to get VM config for VM {vm_data['vmid']}")
+        raise e
+
     nics = []
-    for attr in vm.config.get():
+    for attr in vm_config:
         if attr.startswith("net"):
             nics.append(attr)
 
     # Set boot order to force network boot
-    vm.config.put(boot=f"order={';'.join(nics)}")
+    try:
+        vm.config.put(boot=f"order={';'.join(nics)}")
+    except Exception as e:
+        printf(f"Error: Unable to update boot order for VM {vm_data['vmid']}")
+        raise e
 
     # Power off VM
-    vm.status.stop.post()
+    try:
+        vm.status.stop.post()
+    except Exception as e:
+        printf(f"Error: Unable to stop VM {vm_data['vmid']}")
+        raise e
 
     # Power on VM
-    vm.status.start.post()
+    try:
+        vm.status.start.post()
+    except Exception as e:
+        printf(f"Error: Unable to start VM {vm_data['vmid']}")
+        raise e
 
     # Set default boot order (boot from disk)
-    vm.config.put(boot="order=scsi0")
+    try:
+        vm.config.put(boot="order=scsi0")
+    except Exception as e:
+        printf(f"Error: Unable to restore boot order for VM {vm_data['vmid']}")
+        raise e
 
     return Response(status=200)
 
@@ -194,10 +239,18 @@ def api_v1_exit_installer(uuid):
     vm = vm_data["_proxmox_connector"].nodes(vm_data["node"]).qemu(vm_data["vmid"])
 
     # Power off VM
-    vm.status.stop.post()
+    try:
+        vm.status.stop.post()
+    except Exception as e:
+        printf(f"Error: Unable to stop VM {vm_data['vmid']}")
+        raise e
 
     # Power on VM
-    vm.status.start.post()
+    try:
+        vm.status.start.post()
+    except Exception as e:
+        printf(f"Error: Unable to stop VM {vm_data['vmid']}")
+        raise e
 
     return Response(status=200)
 
